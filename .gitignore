@@ -1,0 +1,57 @@
+# Dados brutos e processados — nunca versionar dados grandes
+data/raw/
+data/processed/
+*.csv
+*.parquet
+*.xlsx
+# Exceção: arquivos pequenos de teste ou referência podem ser adicionados com git add -f
+
+# Modelos treinados (modelo final é commitado para funcionar no Docker)
+models/*.pkl
+# models/*.joblib  ← descomentado = não ignorar, precisa ir pro repositório
+
+# Variáveis de ambiente — NUNCA commitar
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+dist/
+build/
+*.so
+.venv/
+venv/
+env/
+
+# Jupyter
+.ipynb_checkpoints/
+# *.ipynb  ← notebooks DEVEM ser commitados (notebooks/ vai para o repositório)
+
+# MLflow
+mlruns/
+mlartifacts/
+mlflow.db
+
+# Claude Code interno
+.claude/
+
+# Rascunhos
+scratch/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Arquivos de teste temporários
+teste.py
