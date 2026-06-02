@@ -18,6 +18,8 @@ os.environ.setdefault("PYTHONIOENCODING", "utf-8")
 
 from pathlib import Path
 
+import time
+
 import mlflow
 import mlflow.sklearn
 import pandas as pd
@@ -26,10 +28,11 @@ from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (
     average_precision_score,
+    brier_score_loss,
+    classification_report,
     f1_score,
     roc_auc_score,
 )
-from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from xgboost import XGBClassifier
 
@@ -82,6 +85,36 @@ MODELOS_CARTAO = {
 }
 
 
+def _split_cronologico(
+    df: pd.DataFrame, feat_cols: list[str], target: pd.Series
+) -> tuple:
+    """
+    Divisão treino/teste respeitando a ordem temporal das partidas.
+    Treina nos 80% mais antigos, testa nos 20% mais recentes.
+    Garante que o modelo nunca vê o futuro durante o treino.
+    """
+    df_ord = df.sort_values("data").copy()
+    target_ord = target.loc[df_ord.index]
+
+    split_idx = int(len(df_ord) * (1 - TEST_SIZE))
+    df_train = df_ord.iloc[:split_idx]
+    df_test  = df_ord.iloc[split_idx:]
+
+    data_corte = df_ord["data"].iloc[split_idx].date()
+    logger.info(
+        f"  Split cronológico: treino até {df_ord['data'].iloc[split_idx - 1].date()} "
+        f"| teste a partir de {data_corte}"
+    )
+
+    return (
+        df_train[feat_cols],
+        df_test[feat_cols],
+        target_ord.iloc[:split_idx],
+        target_ord.iloc[split_idx:],
+        str(data_corte),
+    )
+
+
 def _carregar_dados() -> pd.DataFrame:
     raw_files = sorted(Path("data/raw").glob("brasileirao_*.parquet"))
     if not raw_files:
@@ -99,41 +132,57 @@ def _treinar_resultado(df: pd.DataFrame, feat_cols: list[str]) -> Pipeline:
 
     y_raw = df[TARGET_RESULTADO]
     y, le = encode_target_resultado(y_raw)
-    X = df[feat_cols]
 
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=TEST_SIZE, random_state=RANDOM_STATE, stratify=y
-    )
+    X_train, X_test, y_train, y_test, data_corte = _split_cronologico(df, feat_cols, y)
     logger.info(f"[resultado] treino={len(X_train)} | teste={len(X_test)}")
     logger.info(f"Classes: {dict(zip(le.classes_, range(len(le.classes_))))}")
 
     best_f1 = -1.0
     best_pipeline = None
 
+    PARAM_KEYS = ("n_estimators", "max_depth", "learning_rate",
+                  "subsample", "colsample_bytree", "C", "max_iter")
+
     for nome, modelo in MODELOS_RESULTADO.items():
         preprocessor = build_preprocessor(feat_cols)
         pipeline = Pipeline([("preprocessor", preprocessor), ("model", modelo)])
 
         with mlflow.start_run(run_name=f"resultado_{nome}"):
+            t0 = time.time()
             pipeline.fit(X_train, y_train)
+            tempo_treino = round(time.time() - t0, 2)
+
             y_pred = pipeline.predict(X_test)
+            report = classification_report(y_test, y_pred,
+                                           target_names=le.classes_,
+                                           output_dict=True)
 
             metricas = {
-                "f1_macro": f1_score(y_test, y_pred, average="macro"),
+                "f1_macro":    f1_score(y_test, y_pred, average="macro"),
                 "f1_weighted": f1_score(y_test, y_pred, average="weighted"),
-                "accuracy": float((y_pred == y_test).mean()),
-                "n_train": len(X_train),
-                "n_test": len(X_test),
-                "n_features": len(feat_cols),
+                "accuracy":    float((y_pred == y_test).mean()),
+                "n_train":     len(X_train),
+                "n_test":      len(X_test),
+                "n_features":  len(feat_cols),
+                "tempo_treino_s": tempo_treino,
             }
+            # Métricas por classe (empate, mandante, visitante)
+            for classe in le.classes_:
+                for metrica in ("precision", "recall", "f1-score"):
+                    chave = f"{metrica.replace('-score','')}_{classe}"
+                    metricas[chave] = round(report[classe][metrica], 4)
 
-            mlflow.log_params({"model_type": nome, "target": "resultado"})
+            # Hiperparâmetros do modelo como params
+            hparams = {k: v for k, v in modelo.get_params().items()
+                       if k in PARAM_KEYS and v is not None}
+            mlflow.log_params({"model_type": nome, "target": "resultado",
+                               "data_corte_teste": data_corte, **hparams})
             mlflow.log_metrics(metricas)
             mlflow.sklearn.log_model(pipeline, artifact_path="model")
 
             logger.info(
                 f"  {nome:25s} | F1-macro={metricas['f1_macro']:.4f} | "
-                f"Acc={metricas['accuracy']:.4f}"
+                f"Acc={metricas['accuracy']:.4f} | {tempo_treino}s"
             )
 
             if metricas["f1_macro"] > best_f1:
@@ -149,11 +198,8 @@ def _treinar_cartao(df: pd.DataFrame, feat_cols: list[str]) -> Pipeline:
     mlflow.set_experiment("brasileirao-cartao-vermelho")
 
     y = df[TARGET_CARTAO]
-    X = df[feat_cols]
 
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=TEST_SIZE, random_state=RANDOM_STATE, stratify=y
-    )
+    X_train, X_test, y_train, y_test, data_corte = _split_cronologico(df, feat_cols, y)
     logger.info(
         f"[cartão vermelho] treino={len(X_train)} | teste={len(X_test)} | "
         f"prevalência={y_test.mean():.1%}"
@@ -162,31 +208,48 @@ def _treinar_cartao(df: pd.DataFrame, feat_cols: list[str]) -> Pipeline:
     best_auc_pr = -1.0
     best_pipeline = None
 
+    PARAM_KEYS = ("n_estimators", "max_depth", "learning_rate",
+                  "subsample", "colsample_bytree", "scale_pos_weight", "C", "max_iter")
+
     for nome, modelo in MODELOS_CARTAO.items():
         preprocessor = build_preprocessor(feat_cols)
         pipeline = Pipeline([("preprocessor", preprocessor), ("model", modelo)])
 
         with mlflow.start_run(run_name=f"cartao_{nome}"):
+            t0 = time.time()
             pipeline.fit(X_train, y_train)
+            tempo_treino = round(time.time() - t0, 2)
+
             y_pred = pipeline.predict(X_test)
             y_proba = pipeline.predict_proba(X_test)[:, 1]
+            report = classification_report(y_test, y_pred,
+                                           target_names=["sem_vermelho", "com_vermelho"],
+                                           output_dict=True)
 
             metricas = {
-                "roc_auc": roc_auc_score(y_test, y_proba),
-                "auc_pr": average_precision_score(y_test, y_proba),
-                "f1_macro": f1_score(y_test, y_pred, average="macro"),
-                "n_train": len(X_train),
-                "n_test": len(X_test),
+                "roc_auc":              roc_auc_score(y_test, y_proba),
+                "auc_pr":               average_precision_score(y_test, y_proba),
+                "brier_score":          round(brier_score_loss(y_test, y_proba), 4),
+                "f1_macro":             f1_score(y_test, y_pred, average="macro"),
+                "precision_cv":         round(report["com_vermelho"]["precision"], 4),
+                "recall_cv":            round(report["com_vermelho"]["recall"], 4),
+                "f1_cv":                round(report["com_vermelho"]["f1-score"], 4),
+                "n_train":              len(X_train),
+                "n_test":               len(X_test),
                 "prevalencia_positivos": float(y_test.mean()),
+                "tempo_treino_s":       tempo_treino,
             }
 
-            mlflow.log_params({"model_type": nome, "target": "cartao_vermelho"})
+            hparams = {k: v for k, v in modelo.get_params().items()
+                       if k in PARAM_KEYS and v is not None}
+            mlflow.log_params({"model_type": nome, "target": "cartao_vermelho",
+                               "data_corte_teste": data_corte, **hparams})
             mlflow.log_metrics(metricas)
             mlflow.sklearn.log_model(pipeline, artifact_path="model")
 
             logger.info(
                 f"  {nome:25s} | AUC-PR={metricas['auc_pr']:.4f} | "
-                f"ROC-AUC={metricas['roc_auc']:.4f}"
+                f"ROC-AUC={metricas['roc_auc']:.4f} | {tempo_treino}s"
             )
 
             if metricas["auc_pr"] > best_auc_pr:
