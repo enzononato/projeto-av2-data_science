@@ -200,6 +200,7 @@ def _treinar_resultado(df: pd.DataFrame, feat_cols: list[str]) -> tuple:
                 n_jobs=1,
                 refit=True,
                 verbose=0,
+                error_score=0.0,
             )
             gs.fit(X_train, y_train)
             pipeline = gs.best_estimator_
@@ -282,6 +283,7 @@ def _treinar_cartao(df: pd.DataFrame, feat_cols: list[str]) -> Pipeline:
                 n_jobs=1,
                 refit=True,
                 verbose=0,
+                error_score=0.0,
             )
             gs.fit(X_train, y_train)
             pipeline = gs.best_estimator_
