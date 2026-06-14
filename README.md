@@ -3,6 +3,66 @@
 Sistema de Machine Learning que prediz **resultado de partidas** (mandante/empate/visitante)
 e **probabilidade de cartão vermelho**, usando o histórico do Campeonato Brasileiro de 2003 a 2025.
 
+## 🚀 Início Rápido — Rodar via Docker (clone do GitHub)
+
+Esta é a forma mais simples de rodar o projeto na sua máquina. **Não precisa** instalar Python,
+nem configurar Kaggle, nem treinar nada — o modelo treinado e as runs do MLflow já vêm no repositório.
+
+### Pré-requisitos
+- [Git](https://git-scm.com/downloads)
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) instalado e **aberto**
+  (espere o ícone da baleia ficar estável antes de continuar)
+
+### Passo a passo
+
+**1. Clonar o repositório**
+```bash
+git clone https://github.com/enzononato/projeto-av2-data_science.git
+cd projeto-av2-data_science
+```
+
+**2. Subir a aplicação (API + MLflow juntos)**
+```bash
+docker compose up --build
+```
+Na primeira vez demora alguns minutos (constrói a imagem da API e baixa o MLflow).
+Deixe esse terminal aberto — é o servidor rodando. Use `docker compose up -d --build`
+para rodar em segundo plano e liberar o terminal.
+
+**3. Acessar no navegador**
+
+| Serviço | URL | O que mostra |
+|---|---|---|
+| **API de predição** | http://localhost:8000/docs | Swagger interativo para testar `/predict` |
+| **MLflow UI** | http://localhost:5000 | Os 8 experimentos comparados (5 resultado + 3 cartão) |
+
+**4. Testar uma predição**
+
+Em http://localhost:8000/docs → `POST /predict` → **Try it out** → cole o corpo abaixo → **Execute**:
+```json
+{
+  "mandante": "Flamengo",
+  "visitante": "Palmeiras",
+  "features": {
+    "mandante_chutes": 15.2,
+    "mandante_gols_marcados": 2.0,
+    "visitante_chutes": 12.4,
+    "visitante_gols_marcados": 1.6
+  }
+}
+```
+
+**5. Parar a aplicação**
+```bash
+# Ctrl+C no terminal (se rodou em primeiro plano), depois:
+docker compose down
+```
+
+> **Onde estão os modelos no MLflow?** No MLflow 3.x, os modelos aparecem na aba **Models**
+> de cada run (não na aba *Artifacts*). São 8 modelos logados, um por experimento.
+
+---
+
 ## Resultados Principais
 
 > Métricas obtidas com **Grid Search (TimeSeriesSplit, 5 folds)** e avaliação **out-of-time**
@@ -154,9 +214,13 @@ curl -X POST http://localhost:8000/predict \
 
 ### 6. Rodar via Docker
 
+Sobe a API (porta 8000) e o MLflow UI (porta 5000) com um único comando:
+
 ```bash
 docker compose up --build
 ```
+
+> Passo a passo completo (clone + execução) na seção [🚀 Início Rápido](#-início-rápido--rodar-via-docker-clone-do-github) no topo deste README.
 
 ## Metodologia (CRISP-DM)
 

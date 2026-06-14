@@ -31,8 +31,8 @@ env/
 
 # MLflow
 mlruns/
-mlartifacts/
-mlflow.db
+# mlflow.db e mlartifacts/ SÃO versionados de propósito: assim quem clonar o
+# repositório vê as 8 runs no MLflow UI direto (docker compose up), sem retreinar.
 
 # Claude Code interno
 .claude/
