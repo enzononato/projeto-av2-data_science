@@ -22,6 +22,7 @@ from pathlib import Path
 import joblib
 import pandas as pd
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 
 MODEL_PATH = Path(os.getenv("MODEL_PATH", "models/model_final.joblib"))
@@ -81,6 +82,12 @@ class PredicaoOutput(BaseModel):
     probabilidades: dict[str, float]
     prob_cartao_vermelho: float
     interpretacao: str
+
+
+@app.get("/", include_in_schema=False)
+def root():
+    """Redireciona a raiz para a documentação interativa."""
+    return RedirectResponse(url="/docs")
 
 
 @app.get("/health")
