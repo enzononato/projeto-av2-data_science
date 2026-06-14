@@ -12,16 +12,17 @@ services:
     restart: unless-stopped
 
   mlflow:
-    image: ghcr.io/mlflow/mlflow:v2.12.1
+    image: ghcr.io/mlflow/mlflow:v3.11.1
     ports:
       - "5000:5000"
     volumes:
-      - ./mlruns:/mlflow/mlruns
+      - ./mlflow.db:/mlflow/mlflow.db
       - ./mlartifacts:/mlflow/mlartifacts
+    working_dir: /mlflow
     command: >
       mlflow server
       --host 0.0.0.0
       --port 5000
-      --backend-store-uri /mlflow/mlruns
-      --default-artifact-root /mlflow/mlartifacts
+      --backend-store-uri sqlite:////mlflow/mlflow.db
+      --artifacts-destination /mlflow/mlartifacts
     restart: unless-stopped
