@@ -10,11 +10,17 @@ from __future__ import annotations
 
 import os
 import sys
+import warnings
 
 # MLflow imprime emojis — força UTF-8 para evitar UnicodeEncodeError no Windows
 if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
     sys.stdout.reconfigure(encoding="utf-8")
 os.environ.setdefault("PYTHONIOENCODING", "utf-8")
+
+# Silencia avisos cosméticos do sklearn durante a validação cruzada temporal.
+# Em folds dos anos mais antigos, algumas colunas de estatística não existiam
+# (eram NaN) — o imputer simplesmente as ignora naquele fold. É esperado.
+warnings.filterwarnings("ignore", message=".*Skipping features without any observed values.*")
 
 from pathlib import Path
 
@@ -252,10 +258,30 @@ def _treinar_resultado(df: pd.DataFrame, feat_cols: list[str]) -> tuple:
     return best_pipeline, le
 
 
+def _filtrar_temporadas_com_cartao(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Mantém apenas as temporadas em que o cartão vermelho foi efetivamente
+    registrado. Nos anos 2003–2014 (e 2024) a estatística não existe no dataset
+    e aparece como zero — treinar com esses 'zeros falsos' corromperia o alvo.
+    Filtra por temporadas que tenham ao menos um cartão vermelho registrado.
+    """
+    anos = pd.to_datetime(df["data"]).dt.year
+    positivos_por_ano = df[TARGET_CARTAO].groupby(anos).sum()
+    anos_validos = positivos_por_ano[positivos_por_ano > 0].index
+    df_valido = df[anos.isin(anos_validos)].copy()
+    logger.info(
+        f"[cartão vermelho] temporadas com dado real: {sorted(anos_validos.tolist())} "
+        f"| {len(df_valido)} de {len(df)} partidas mantidas"
+    )
+    return df_valido
+
+
 def _treinar_cartao(df: pd.DataFrame, feat_cols: list[str]) -> Pipeline:
     """Treina 3 modelos de cartão vermelho com Grid Search, loga no MLflow, retorna o melhor."""
     mlflow.set_experiment("brasileirao-cartao-vermelho")
 
+    # Remove temporadas sem registro de cartão vermelho (alvo inválido)
+    df = _filtrar_temporadas_com_cartao(df)
     y = df[TARGET_CARTAO]
 
     X_train, X_test, y_train, y_test, data_corte = _split_cronologico(df, feat_cols, y)
