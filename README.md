@@ -3,10 +3,15 @@
 Sistema de Machine Learning que prediz **resultado de partidas** (mandante/empate/visitante)
 e **probabilidade de cartão vermelho**, usando o histórico do Campeonato Brasileiro de 2003 a 2025.
 
-## 🚀 Início Rápido — Rodar via Docker (clone do GitHub)
+## 🚀 Início Rápido — Rodar SÓ com Docker (sem treinar nada)
 
 Esta é a forma mais simples de rodar o projeto na sua máquina. **Não precisa** instalar Python,
 nem configurar Kaggle, nem treinar nada — o modelo treinado e as runs do MLflow já vêm no repositório.
+
+> ✅ **Você NÃO precisa treinar o modelo.** O arquivo `models/model_final.joblib` e o histórico do
+> MLflow (`mlflow.db` + `mlartifacts/`) já estão versionados. Basta ter o Docker e rodar **um comando**.
+> Treinar do zero (Kaggle + ingestão + `python -m src.train`) só é necessário se você quiser
+> **regerar** os modelos — veja a seção [Como Rodar (desenvolvimento)](#como-rodar) mais abaixo.
 
 ### Pré-requisitos
 - [Git](https://git-scm.com/downloads)
