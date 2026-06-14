@@ -5,27 +5,33 @@ e **probabilidade de cartão vermelho**, usando o histórico do Campeonato Brasi
 
 ## Resultados Principais
 
+> Métricas obtidas com **Grid Search (TimeSeriesSplit, 5 folds)** e avaliação **out-of-time**
+> (treino nos 80% mais antigos, teste nos 20% mais recentes).
+
 ### Modelo 1 — Resultado da Partida (multiclasse)
 
 | Modelo | F1-macro | Acurácia |
 |---|---|---|
-| **Logistic Regression** | **0.3872** | 0.4218 |
-| XGBoost (default) | 0.3375 | 0.4530 |
-| Gradient Boosting | 0.3025 | 0.5005 |
-| Random Forest | 0.2994 | 0.4765 |
-| XGBoost (tuned) | 0.2937 | 0.4984 |
+| **Random Forest** | **0.3767** | 0.4147 |
+| Logistic Regression | 0.3548 | 0.3550 |
+| XGBoost (default) | 0.3453 | 0.4026 |
+| XGBoost (tuned) | 0.3428 | 0.4365 |
+| Gradient Boosting | 0.2763 | 0.2943 |
 
 > Baseline (sempre prever mandante): F1-macro ≈ 0.26 — todos os modelos superam o baseline.
 
-### Modelo 2 — Cartão Vermelho (binário, 8.6% prevalência)
+### Modelo 2 — Cartão Vermelho (binário, 21.3% prevalência)
 
-| Modelo | AUC-PR | ROC-AUC |
-|---|---|---|
-| **Logistic Regression** | **0.2145** | **0.8211** |
-| XGBoost | 0.2110 | 0.8158 |
-| Random Forest | 0.2043 | 0.8156 |
+Restrito às temporadas com registro real de cartão vermelho (2015–2023 e 2025).
 
-> Baseline AUC-PR = 0.086 (prevalência). Melhor modelo é 2.5× acima do baseline.
+| Modelo | AUC-PR | ROC-AUC | Brier |
+|---|---|---|---|
+| **Random Forest** | **0.2425** | 0.5428 | 0.1676 |
+| Logistic Regression | 0.2277 | 0.5279 | 0.2354 |
+| XGBoost | 0.2243 | 0.5399 | 0.2022 |
+
+> Baseline AUC-PR = 0.213 (prevalência). Prever cartão a partir de estatísticas pré-jogo é
+> genuinamente difícil — o ganho modesto sobre o baseline é um resultado honesto.
 
 ## Contexto de Negócio
 
